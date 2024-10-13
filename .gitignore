@@ -1,2 +1,4 @@
 sh
 .vscode
+stress/search
+stress/path

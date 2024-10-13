@@ -36,7 +36,8 @@ void execute_command(char *cmd[])
 
     struct clone_args args = {
         .flags = CLONE_FS | CLONE_FILES ,
-        .exit_signal = SIGCHLD};
+        .exit_signal = SIGCHLD
+        };
 
     pid_t pid = syscall(SYS_clone3, &args, sizeof(struct clone_args));
     // pid_t pid = fork();
