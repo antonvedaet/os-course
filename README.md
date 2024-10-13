@@ -59,3 +59,6 @@ $ perf stat ./path 1000000
        4.490512000 seconds user
       11.901358000 seconds sys
 ```
+### Запуск нескольких экземпляров
+![search_name](./images/search_name_4.png) 
+![short_path](./images/short_path_4.png)
