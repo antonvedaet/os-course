@@ -7,12 +7,11 @@
 #include <linux/sched.h>
 #include <sched.h>
 #include <cstdlib>
-#include <sys/mman.h>
 
 int child_func(char *cmd[])
 {
     execvp(cmd[0], cmd);
-    std::cerr << "Ошибка выполнения команды: " << cmd[0] << std::endl;
+    std::cerr << "error during command execution: " << cmd[0] << std::endl;
     return 1;
 }
 
@@ -36,15 +35,14 @@ void execute_command(char *cmd[])
     };
 
     struct clone_args args = {
-        .flags = CLONE_VM | CLONE_FS | CLONE_UNTRACED,
-        .stack = reinterpret_cast<unsigned long>(malloc(1024 * 1024)),
-        .stack_size = 1024 * 1024};
+        .flags = CLONE_FS | CLONE_FILES ,
+        .exit_signal = SIGCHLD};
 
-    pid_t pid = syscall(SYS_clone3, &args, sizeof(args));
+    pid_t pid = syscall(SYS_clone3, &args, sizeof(struct clone_args));
     // pid_t pid = fork();
     if (pid == -1)
     {
-        std::cerr << "Ошибка при создании процесса: " << strerror(errno) << std::endl;
+        std::cerr << "error during process creation: " << strerror(errno) << std::endl;
         return;
     }
     else if (pid == 0)
@@ -60,7 +58,7 @@ void execute_command(char *cmd[])
 
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
-        std::cout << "Время выполнения: " << elapsed.count() << " секунд.\n";
+        std::cout << "execution time: " << elapsed.count() << " seconds\n";
 
         free(reinterpret_cast<void *>(args.stack));
     }
@@ -80,7 +78,8 @@ int main()
         }
 
         char *cmd[100];
-        char *token = std::strtok(const_cast<char *>(input.c_str()), " ");
+        char *input_copy = strdup(input.c_str());
+        char *token = strtok(input_copy, " ");
         int i = 0;
 
         while (token != nullptr)
@@ -91,6 +90,7 @@ int main()
         cmd[i] = nullptr;
 
         execute_command(cmd);
+        free(input_copy);
     }
     return 0;
 }
