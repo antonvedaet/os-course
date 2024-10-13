@@ -121,4 +121,7 @@ $ perf stat ./combined README.md /mnt/d/ITMO 2 1000000
 
        1.703641000 seconds user
        8.904496000 seconds sys
+
+$ mpstat -P ALL
 ```
+![mpstat](./images/mpstat_combined_15.png)
