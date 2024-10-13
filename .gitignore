@@ -2,3 +2,4 @@ sh
 .vscode
 stress/search
 stress/path
+stress/combined

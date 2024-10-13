@@ -62,3 +62,63 @@ $ perf stat ./path 1000000
 ### Запуск нескольких экземпляров
 ![search_name](./images/search_name_4.png) 
 ![short_path](./images/short_path_4.png)
+
+
+### Комбинированная программа
+```bash
+$ g++ -std=c++17 -pthread -o combined combined.cpp
+
+
+
+$ time ./combined README.md /mnt/d/ITMO 2 1000000
+
+real    0m21.808s
+user    0m5.705s
+sys     0m13.142s
+
+
+ Performance counter stats for './combined README.md /mnt/d/ITMO 2 1000000':
+
+         20,859.93 msec task-clock:u                     #    0.866 CPUs utilized             
+                 0      context-switches:u               #    0.000 /sec                      
+                 0      cpu-migrations:u                 #    0.000 /sec                      
+               232      page-faults:u                    #   11.122 /sec                      
+    25,761,022,934      cycles:u                         #    1.235 GHz                       
+    21,448,069,817      instructions:u                   #    0.83  insn per cycle            
+     3,615,593,438      branches:u                       #  173.327 M/sec                     
+        99,669,133      branch-misses:u                  #    2.76% of all branches           
+
+      24.079579233 seconds time elapsed
+
+       5.743142000 seconds user
+      15.944386000 seconds sys
+```
+
+### Агрессивная оптимизация
+```bash
+$ g++ -std=c++17 -pthread -O3 -o combined combined.cpp
+
+$ time ./combined README.md /mnt/d/ITMO 2 1000000
+
+real    0m23.219s
+user    0m1.591s
+sys     0m8.014s
+
+$ perf stat ./combined README.md /mnt/d/ITMO 2 1000000
+
+ Performance counter stats for './combined README.md /mnt/d/ITMO 2 1000000':
+
+          9,863.25 msec task-clock:u                     #    0.405 CPUs utilized             
+                 0      context-switches:u               #    0.000 /sec                      
+                 0      cpu-migrations:u                 #    0.000 /sec                      
+               236      page-faults:u                    #   23.927 /sec                      
+     6,409,320,446      cycles:u                         #    0.650 GHz                       
+     5,213,759,508      instructions:u                   #    0.81  insn per cycle            
+     1,122,948,952      branches:u                       #  113.852 M/sec                     
+        45,446,388      branch-misses:u                  #    4.05% of all branches           
+
+      24.354725833 seconds time elapsed
+
+       1.703641000 seconds user
+       8.904496000 seconds sys
+```
