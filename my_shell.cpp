@@ -5,7 +5,9 @@
 #include <unistd.h>
 #include <chrono>
 #include <linux/sched.h>
+#include <sched.h>
 #include <cstdlib>
+#include <sys/mman.h>
 
 int child_func(char *cmd[])
 {
@@ -34,7 +36,7 @@ void execute_command(char *cmd[])
     };
 
     struct clone_args args = {
-        .flags = CLONE_FS | CLONE_VFORK,
+        .flags = CLONE_VM | CLONE_FS | CLONE_UNTRACED,
         .stack = reinterpret_cast<unsigned long>(malloc(1024 * 1024)),
         .stack_size = 1024 * 1024};
 
