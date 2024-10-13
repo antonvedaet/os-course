@@ -34,13 +34,11 @@ void execute_command(char *cmd[])
     };
 
     struct clone_args args = {
-        .flags = CLONE_VM | CLONE_FS | CLONE_UNTRACED,
-        .exit_signal = SIGCHLD,
+        .flags = CLONE_FS | CLONE_VFORK,
         .stack = reinterpret_cast<unsigned long>(malloc(1024 * 1024)),
-        .stack_size = 1024 * 1024,
-    };
+        .stack_size = 1024 * 1024};
 
-    pid_t pid = syscall(SYS_clone3, &args);
+    pid_t pid = syscall(SYS_clone3, &args, sizeof(args));
     // pid_t pid = fork();
     if (pid == -1)
     {
