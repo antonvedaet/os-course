@@ -1,0 +1,32 @@
+
+ Performance counter stats for './path 100000':
+
+          1 447,52 msec task-clock:u                     #    0,554 CPUs utilized             
+                 0      context-switches:u               #    0,000 /sec                      
+                 0      cpu-migrations:u                 #    0,000 /sec                      
+               126      page-faults:u                    #   87,046 /sec                      
+     4 491 978 931      cycles:u                         #    3,103 GHz                         (43,45%)
+       658 851 599      stalled-cycles-frontend:u        #   14,67% frontend cycles idle        (44,02%)
+     5 264 808 130      instructions:u                   #    1,17  insn per cycle            
+                                                  #    0,13  stalled cycles per insn     (44,20%)
+       812 409 405      branches:u                       #  561,244 M/sec                       (43,65%)
+           467 993      branch-misses:u                  #    0,06% of all branches             (42,39%)
+     2 671 240 096      L1-dcache-loads:u                #    1,845 G/sec                       (42,60%)
+           271 594      L1-dcache-load-misses:u          #    0,01% of all L1-dcache accesses   (42,48%)
+   <not supported>      LLC-loads:u                                                           
+   <not supported>      LLC-load-misses:u                                                     
+       306 826 947      L1-icache-loads:u                #  211,968 M/sec                       (41,53%)
+           271 508      L1-icache-load-misses:u          #    0,09% of all L1-icache accesses   (41,70%)
+           110 486      dTLB-loads:u                     #   76,328 K/sec                       (42,16%)
+            36 206      dTLB-load-misses:u               #   32,77% of all dTLB cache accesses  (42,29%)
+             8 139      iTLB-loads:u                     #    5,623 K/sec                       (42,68%)
+             4 161      iTLB-load-misses:u               #   51,12% of all iTLB cache accesses  (43,49%)
+            61 886      L1-dcache-prefetches:u           #   42,753 K/sec                       (43,36%)
+   <not supported>      L1-dcache-prefetch-misses:u                                           
+
+       2,613872404 seconds time elapsed
+
+       1,427312000 seconds user
+       0,006621000 seconds sys
+
+

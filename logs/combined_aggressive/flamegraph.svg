@@ -1,0 +1,890 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="278" onload="init(evt)" viewBox="0 0 1200 278" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs >
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	.func_g:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	var details, searchbtn, matchedtxt, svg;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+	}
+
+	// mouse-over for info
+	function s(node) {		// show
+		info = g_to_text(node);
+		details.nodeValue = "Function: " + info;
+	}
+	function c() {			// clear
+		details.nodeValue = ' ';
+	}
+
+	// ctrl-F for search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+	})
+
+	// functions
+	function find_child(parent, name, attr) {
+		var children = parent.childNodes;
+		for (var i=0; i<children.length;i++) {
+			if (children[i].tagName == name)
+				return (attr != undefined) ? children[i].attributes[attr].value : children[i];
+		}
+		return;
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_"+attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_"+attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_"+attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes["width"].value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes["x"].value = parseFloat(r.attributes["x"].value) +3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2*12*0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		// Fit in full text width
+		if (/^ *$/.test(txt) || t.getSubStringLength(0, txt.length) < w)
+			return;
+
+		for (var x=txt.length-2; x>0; x--) {
+			if (t.getSubStringLength(0, x+2) <= w) {
+				t.textContent = txt.substring(0,x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes["x"] != undefined) {
+				orig_save(e, "x");
+				e.attributes["x"].value = (parseFloat(e.attributes["x"].value) - x - 10) * ratio + 10;
+				if(e.tagName == "text") e.attributes["x"].value = find_child(e.parentNode, "rect", "x") + 3;
+			}
+			if (e.attributes["width"] != undefined) {
+				orig_save(e, "width");
+				e.attributes["width"].value = parseFloat(e.attributes["width"].value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_child(c[i], x-10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes["x"] != undefined) {
+				orig_save(e, "x");
+				e.attributes["x"].value = 10;
+			}
+			if (e.attributes["width"] != undefined) {
+				orig_save(e, "width");
+				e.attributes["width"].value = parseInt(svg.width.baseVal.value) - (10*2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for(var i=0, c=e.childNodes; i<c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr["width"].value);
+		var xmin = parseFloat(attr["x"].value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr["y"].value);
+		var ratio = (svg.width.baseVal.value - 2*10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		var unzoombtn = document.getElementById("unzoom");
+		unzoombtn.style["opacity"] = "1.0";
+
+		var el = document.getElementsByTagName("g");
+		for(var i=0;i<el.length;i++){
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a["x"].value);
+			var ew = parseFloat(a["width"].value);
+			// Is it an ancestor
+			if (0 == 0) {
+				var upstack = parseFloat(a["y"].value) > ymin;
+			} else {
+				var upstack = parseFloat(a["y"].value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.style["opacity"] = "0.5";
+					zoom_parent(e);
+					e.onclick = function(e){unzoom(); zoom(this);};
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.style["display"] = "none";
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.style["display"] = "none";
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					e.onclick = function(e){zoom(this);};
+					update_text(e);
+				}
+			}
+		}
+	}
+	function unzoom() {
+		var unzoombtn = document.getElementById("unzoom");
+		unzoombtn.style["opacity"] = "0.0";
+
+		var el = document.getElementsByTagName("g");
+		for(i=0;i<el.length;i++) {
+			el[i].style["display"] = "block";
+			el[i].style["opacity"] = "1";
+			zoom_reset(el[i]);
+			update_text(el[i]);
+		}
+	}
+
+	// search
+	function reset_search() {
+		var el = document.getElementsByTagName("rect");
+		for (var i=0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)", "");
+			if (term != null) {
+				search(term)
+			}
+		} else {
+			reset_search();
+			searching = 0;
+			searchbtn.style["opacity"] = "0.1";
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.style["opacity"] = "0.0";
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		var re = new RegExp(term);
+		var el = document.getElementsByTagName("g");
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			if (e.attributes["class"].value != "func_g")
+				continue;
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (rect == null) {
+				// the rect might be wrapped in an anchor
+				// if nameattr href is being used
+				if (rect = find_child(e, "a")) {
+				    rect = find_child(r, "rect");
+				}
+			}
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes["width"].value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes["x"].value);
+				orig_save(rect, "fill");
+				rect.attributes["fill"].value =
+				    "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+
+		searchbtn.style["opacity"] = "1.0";
+		searchbtn.firstChild.nodeValue = "Reset Search"
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.style["opacity"] = "1.0";
+		pct = 100 * count / maxwidth;
+		if (pct == 100)
+			pct = "100"
+		else
+			pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+	function searchover(e) {
+		searchbtn.style["opacity"] = "1.0";
+	}
+	function searchout(e) {
+		if (searching) {
+			searchbtn.style["opacity"] = "1.0";
+		} else {
+			searchbtn.style["opacity"] = "0.1";
+		}
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="278.0" fill="url(#background)"  />
+<text text-anchor="middle" x="600.00" y="24" font-size="17" font-family="Verdana" fill="rgb(0,0,0)"  >Flame Graph</text>
+<text text-anchor="" x="10.00" y="261" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="details" > </text>
+<text text-anchor="" x="10.00" y="24" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="unzoom" onclick="unzoom()" style="opacity:0.0;cursor:pointer" >Reset Zoom</text>
+<text text-anchor="" x="1090.00" y="24" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="search" onmouseover="searchover()" onmouseout="searchout()" onclick="search_prompt()" style="opacity:0.1;cursor:pointer" >Search</text>
+<text text-anchor="" x="1090.00" y="261" font-size="12" font-family="Verdana" fill="rgb(0,0,0)" id="matched" > </text>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (2 samples, 0.93%)</title><rect x="59.4" y="165" width="11.0" height="15.0" fill="rgb(245,61,41)" rx="2" ry="2" />
+<text text-anchor="" x="62.40" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_M_split_cmpts (11 samples, 5.12%)</title><rect x="180.1" y="181" width="60.4" height="15.0" fill="rgb(245,119,5)" rx="2" ry="2" />
+<text text-anchor="" x="183.14" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::f..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (3 samples, 1.40%)</title><rect x="114.3" y="165" width="16.4" height="15.0" fill="rgb(237,146,4)" rx="2" ry="2" />
+<text text-anchor="" x="117.28" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::_V2::system_category (1 samples, 0.47%)</title><rect x="174.7" y="181" width="5.4" height="15.0" fill="rgb(240,3,4)" rx="2" ry="2" />
+<text text-anchor="" x="177.65" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>__ctype_init (1 samples, 0.47%)</title><rect x="97.8" y="181" width="5.5" height="15.0" fill="rgb(222,104,35)" rx="2" ry="2" />
+<text text-anchor="" x="100.81" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_Impl::copy (19 samples, 8.84%)</title><rect x="635.7" y="117" width="104.3" height="15.0" fill="rgb(242,134,31)" rx="2" ry="2" />
+<text text-anchor="" x="638.67" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesys..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (3 samples, 1.40%)</title><rect x="114.3" y="181" width="16.4" height="15.0" fill="rgb(249,165,48)" rx="2" ry="2" />
+<text text-anchor="" x="117.28" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>snprintf (2 samples, 0.93%)</title><rect x="81.3" y="149" width="11.0" height="15.0" fill="rgb(233,210,54)" rx="2" ry="2" />
+<text text-anchor="" x="84.35" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="92.3" y="117" width="5.5" height="15.0" fill="rgb(234,197,10)" rx="2" ry="2" />
+<text text-anchor="" x="95.33" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_Impl_deleter::operator (3 samples, 1.40%)</title><rect x="1025.3" y="101" width="16.5" height="15.0" fill="rgb(225,120,16)" rx="2" ry="2" />
+<text text-anchor="" x="1028.35" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>cfree (9 samples, 4.19%)</title><rect x="558.8" y="117" width="49.4" height="15.0" fill="rgb(243,145,11)" rx="2" ry="2" />
+<text text-anchor="" x="561.84" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >cfree</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::_Dir::advance (141 samples, 65.58%)</title><rect x="350.3" y="149" width="773.8" height="15.0" fill="rgb(239,220,12)" rx="2" ry="2" />
+<text text-anchor="" x="353.28" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesystem::__cxx11::_Dir::advance</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>fdopendir (1 samples, 0.47%)</title><rect x="311.9" y="149" width="5.4" height="15.0" fill="rgb(245,127,14)" rx="2" ry="2" />
+<text text-anchor="" x="314.86" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_M_split_cmpts (10 samples, 4.65%)</title><rect x="1041.8" y="101" width="54.9" height="15.0" fill="rgb(243,58,2)" rx="2" ry="2" />
+<text text-anchor="" x="1044.81" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="317.3" y="101" width="5.5" height="15.0" fill="rgb(212,215,52)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>cfree (5 samples, 2.33%)</title><rect x="383.2" y="133" width="27.5" height="15.0" fill="rgb(215,45,14)" rx="2" ry="2" />
+<text text-anchor="" x="386.21" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >c..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::has_filename (1 samples, 0.47%)</title><rect x="1118.7" y="133" width="5.4" height="15.0" fill="rgb(218,208,52)" rx="2" ry="2" />
+<text text-anchor="" x="1121.65" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (1 samples, 0.47%)</title><rect x="1019.9" y="101" width="5.4" height="15.0" fill="rgb(223,59,44)" rx="2" ry="2" />
+<text text-anchor="" x="1022.86" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Graph::dijkstra (2 samples, 0.93%)</title><rect x="103.3" y="181" width="11.0" height="15.0" fill="rgb(248,136,13)" rx="2" ry="2" />
+<text text-anchor="" x="106.30" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (4 samples, 1.86%)</title><rect x="37.4" y="69" width="22.0" height="15.0" fill="rgb(243,210,43)" rx="2" ry="2" />
+<text text-anchor="" x="40.44" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="1019.9" y="53" width="5.4" height="15.0" fill="rgb(215,31,30)" rx="2" ry="2" />
+<text text-anchor="" x="1022.86" y="63.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_Impl_deleter::operator (1 samples, 0.47%)</title><rect x="970.5" y="117" width="5.5" height="15.0" fill="rgb(206,101,39)" rx="2" ry="2" />
+<text text-anchor="" x="973.47" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="317.3" y="69" width="5.5" height="15.0" fill="rgb(249,119,4)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (7 samples, 3.26%)</title><rect x="421.6" y="85" width="38.4" height="15.0" fill="rgb(236,104,52)" rx="2" ry="2" />
+<text text-anchor="" x="424.63" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[un..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator delete (1 samples, 0.47%)</title><rect x="322.8" y="149" width="5.5" height="15.0" fill="rgb(242,218,40)" rx="2" ry="2" />
+<text text-anchor="" x="325.84" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (2 samples, 0.93%)</title><rect x="163.7" y="181" width="11.0" height="15.0" fill="rgb(226,226,51)" rx="2" ry="2" />
+<text text-anchor="" x="166.67" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="92.3" y="133" width="5.5" height="15.0" fill="rgb(219,156,14)" rx="2" ry="2" />
+<text text-anchor="" x="95.33" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="317.3" y="53" width="5.5" height="15.0" fill="rgb(216,22,4)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="63.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::end (1 samples, 0.47%)</title><rect x="1135.1" y="149" width="5.5" height="15.0" fill="rgb(219,72,14)" rx="2" ry="2" />
+<text text-anchor="" x="1138.12" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (1 samples, 0.47%)</title><rect x="311.9" y="133" width="5.4" height="15.0" fill="rgb(251,81,32)" rx="2" ry="2" />
+<text text-anchor="" x="314.86" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_Impl::copy (1 samples, 0.47%)</title><rect x="1129.6" y="133" width="5.5" height="15.0" fill="rgb(225,167,21)" rx="2" ry="2" />
+<text text-anchor="" x="1132.63" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="75.9" y="165" width="5.4" height="15.0" fill="rgb(249,100,3)" rx="2" ry="2" />
+<text text-anchor="" x="78.86" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>find_file (185 samples, 86.05%)</title><rect x="136.2" y="197" width="1015.4" height="15.0" fill="rgb(210,169,25)" rx="2" ry="2" />
+<text text-anchor="" x="139.23" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >find_file</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (7 samples, 3.26%)</title><rect x="240.5" y="149" width="38.4" height="15.0" fill="rgb(250,139,3)" rx="2" ry="2" />
+<text text-anchor="" x="243.51" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[un..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::reserve (22 samples, 10.23%)</title><rect x="976.0" y="117" width="120.7" height="15.0" fill="rgb(226,164,23)" rx="2" ry="2" />
+<text text-anchor="" x="978.95" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesystem..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (3 samples, 1.40%)</title><rect x="899.1" y="117" width="16.5" height="15.0" fill="rgb(225,190,47)" rx="2" ry="2" />
+<text text-anchor="" x="902.12" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>combined (215 samples, 100.00%)</title><rect x="10.0" y="213" width="1180.0" height="15.0" fill="rgb(242,8,0)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="223.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >combined</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>cfree (1 samples, 0.47%)</title><rect x="306.4" y="133" width="5.5" height="15.0" fill="rgb(230,106,1)" rx="2" ry="2" />
+<text text-anchor="" x="309.37" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>readdir64 (2 samples, 0.93%)</title><rect x="487.5" y="133" width="11.0" height="15.0" fill="rgb(236,164,38)" rx="2" ry="2" />
+<text text-anchor="" x="490.49" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>cfree (1 samples, 0.47%)</title><rect x="108.8" y="165" width="5.5" height="15.0" fill="rgb(222,164,19)" rx="2" ry="2" />
+<text text-anchor="" x="111.79" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (8 samples, 3.72%)</title><rect x="26.5" y="181" width="43.9" height="15.0" fill="rgb(225,168,18)" rx="2" ry="2" />
+<text text-anchor="" x="29.47" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[ld-..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (6 samples, 2.79%)</title><rect x="26.5" y="133" width="32.9" height="15.0" fill="rgb(234,104,8)" rx="2" ry="2" />
+<text text-anchor="" x="29.47" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[l..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (1 samples, 0.47%)</title><rect x="311.9" y="101" width="5.4" height="15.0" fill="rgb(218,39,20)" rx="2" ry="2" />
+<text text-anchor="" x="314.86" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::recursive_directory_iterator::operator++ (166 samples, 77.21%)</title><rect x="240.5" y="181" width="911.1" height="15.0" fill="rgb(224,6,2)" rx="2" ry="2" />
+<text text-anchor="" x="243.51" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesystem::__cxx11::recursive_directory_iterator::operator++</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="273.4" y="53" width="5.5" height="15.0" fill="rgb(243,161,44)" rx="2" ry="2" />
+<text text-anchor="" x="276.44" y="63.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (11 samples, 5.12%)</title><rect x="21.0" y="197" width="60.3" height="15.0" fill="rgb(250,215,23)" rx="2" ry="2" />
+<text text-anchor="" x="23.98" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[ld-li..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (3 samples, 1.40%)</title><rect x="394.2" y="117" width="16.5" height="15.0" fill="rgb(226,156,1)" rx="2" ry="2" />
+<text text-anchor="" x="397.19" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_Parser::next (2 samples, 0.93%)</title><rect x="229.5" y="165" width="11.0" height="15.0" fill="rgb(239,113,4)" rx="2" ry="2" />
+<text text-anchor="" x="232.53" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (1 samples, 0.47%)</title><rect x="1129.6" y="117" width="5.5" height="15.0" fill="rgb(216,71,32)" rx="2" ry="2" />
+<text text-anchor="" x="1132.63" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (6 samples, 2.79%)</title><rect x="26.5" y="149" width="32.9" height="15.0" fill="rgb(246,135,19)" rx="2" ry="2" />
+<text text-anchor="" x="29.47" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[l..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="273.4" y="69" width="5.5" height="15.0" fill="rgb(216,225,53)" rx="2" ry="2" />
+<text text-anchor="" x="276.44" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (3 samples, 1.40%)</title><rect x="81.3" y="181" width="16.5" height="15.0" fill="rgb(243,177,34)" rx="2" ry="2" />
+<text text-anchor="" x="84.35" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (1 samples, 0.47%)</title><rect x="1124.1" y="133" width="5.5" height="15.0" fill="rgb(224,11,20)" rx="2" ry="2" />
+<text text-anchor="" x="1127.14" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_M_split_cmpts (2 samples, 0.93%)</title><rect x="1140.6" y="149" width="11.0" height="15.0" fill="rgb(249,153,26)" rx="2" ry="2" />
+<text text-anchor="" x="1143.60" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (2 samples, 0.93%)</title><rect x="295.4" y="149" width="11.0" height="15.0" fill="rgb(217,148,37)" rx="2" ry="2" />
+<text text-anchor="" x="298.40" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (6 samples, 2.79%)</title><rect x="26.5" y="101" width="32.9" height="15.0" fill="rgb(213,64,22)" rx="2" ry="2" />
+<text text-anchor="" x="29.47" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[l..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_create (1 samples, 0.47%)</title><rect x="932.0" y="117" width="5.5" height="15.0" fill="rgb(209,59,4)" rx="2" ry="2" />
+<text text-anchor="" x="935.05" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (2 samples, 0.93%)</title><rect x="268.0" y="101" width="10.9" height="15.0" fill="rgb(215,91,38)" rx="2" ry="2" />
+<text text-anchor="" x="270.95" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator delete (2 samples, 0.93%)</title><rect x="465.5" y="133" width="11.0" height="15.0" fill="rgb(237,53,20)" rx="2" ry="2" />
+<text text-anchor="" x="468.53" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (3 samples, 1.40%)</title><rect x="613.7" y="117" width="16.5" height="15.0" fill="rgb(225,93,45)" rx="2" ry="2" />
+<text text-anchor="" x="616.72" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (4 samples, 1.86%)</title><rect x="690.6" y="101" width="21.9" height="15.0" fill="rgb(242,199,50)" rx="2" ry="2" />
+<text text-anchor="" x="693.56" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >o..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (2 samples, 0.93%)</title><rect x="476.5" y="117" width="11.0" height="15.0" fill="rgb(230,105,8)" rx="2" ry="2" />
+<text text-anchor="" x="479.51" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_M_split_cmpts (1 samples, 0.47%)</title><rect x="344.8" y="133" width="5.5" height="15.0" fill="rgb(215,136,12)" rx="2" ry="2" />
+<text text-anchor="" x="347.79" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_M_split_cmpts (2 samples, 0.93%)</title><rect x="1096.7" y="117" width="11.0" height="15.0" fill="rgb(225,89,17)" rx="2" ry="2" />
+<text text-anchor="" x="1099.70" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_Impl_deleter::operator (1 samples, 0.47%)</title><rect x="1157.1" y="197" width="5.5" height="15.0" fill="rgb(244,6,32)" rx="2" ry="2" />
+<text text-anchor="" x="1160.07" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>Graph::dijkstra (2 samples, 0.93%)</title><rect x="10.0" y="197" width="11.0" height="15.0" fill="rgb(239,46,8)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (9 samples, 4.19%)</title><rect x="410.7" y="117" width="49.3" height="15.0" fill="rgb(230,130,32)" rx="2" ry="2" />
+<text text-anchor="" x="413.65" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[unk..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (2 samples, 0.93%)</title><rect x="59.4" y="149" width="11.0" height="15.0" fill="rgb(243,187,5)" rx="2" ry="2" />
+<text text-anchor="" x="62.40" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (4 samples, 1.86%)</title><rect x="438.1" y="69" width="21.9" height="15.0" fill="rgb(223,106,14)" rx="2" ry="2" />
+<text text-anchor="" x="441.09" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (2 samples, 0.93%)</title><rect x="268.0" y="85" width="10.9" height="15.0" fill="rgb(221,201,23)" rx="2" ry="2" />
+<text text-anchor="" x="270.95" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (3 samples, 1.40%)</title><rect x="948.5" y="101" width="16.5" height="15.0" fill="rgb(250,135,25)" rx="2" ry="2" />
+<text text-anchor="" x="951.51" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (3 samples, 1.40%)</title><rect x="948.5" y="85" width="16.5" height="15.0" fill="rgb(239,200,2)" rx="2" ry="2" />
+<text text-anchor="" x="951.51" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_List (5 samples, 2.33%)</title><rect x="712.5" y="101" width="27.5" height="15.0" fill="rgb(223,49,48)" rx="2" ry="2" />
+<text text-anchor="" x="715.51" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >s..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (1 samples, 0.47%)</title><rect x="108.8" y="149" width="5.5" height="15.0" fill="rgb(213,125,51)" rx="2" ry="2" />
+<text text-anchor="" x="111.79" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (5 samples, 2.33%)</title><rect x="32.0" y="85" width="27.4" height="15.0" fill="rgb(251,121,10)" rx="2" ry="2" />
+<text text-anchor="" x="34.95" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (6 samples, 2.79%)</title><rect x="26.5" y="165" width="32.9" height="15.0" fill="rgb(214,128,34)" rx="2" ry="2" />
+<text text-anchor="" x="29.47" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[l..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>cfree (3 samples, 1.40%)</title><rect x="915.6" y="117" width="16.4" height="15.0" fill="rgb(217,152,17)" rx="2" ry="2" />
+<text text-anchor="" x="918.58" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::compare (2 samples, 0.93%)</title><rect x="1173.5" y="197" width="11.0" height="15.0" fill="rgb(241,1,48)" rx="2" ry="2" />
+<text text-anchor="" x="1176.53" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>__close_nocancel (7 samples, 3.26%)</title><rect x="240.5" y="165" width="38.4" height="15.0" fill="rgb(207,121,53)" rx="2" ry="2" />
+<text text-anchor="" x="243.51" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >__c..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (1 samples, 0.47%)</title><rect x="1019.9" y="85" width="5.4" height="15.0" fill="rgb(228,3,40)" rx="2" ry="2" />
+<text text-anchor="" x="1022.86" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (2 samples, 0.93%)</title><rect x="449.1" y="53" width="10.9" height="15.0" fill="rgb(241,216,15)" rx="2" ry="2" />
+<text text-anchor="" x="452.07" y="63.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (1 samples, 0.47%)</title><rect x="630.2" y="117" width="5.5" height="15.0" fill="rgb(220,208,9)" rx="2" ry="2" />
+<text text-anchor="" x="633.19" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="64.9" y="117" width="5.5" height="15.0" fill="rgb(230,199,5)" rx="2" ry="2" />
+<text text-anchor="" x="67.88" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>closedir (1 samples, 0.47%)</title><rect x="306.4" y="149" width="5.5" height="15.0" fill="rgb(220,83,18)" rx="2" ry="2" />
+<text text-anchor="" x="309.37" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (5 samples, 2.33%)</title><rect x="103.3" y="197" width="27.4" height="15.0" fill="rgb(243,228,33)" rx="2" ry="2" />
+<text text-anchor="" x="106.30" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="317.3" y="117" width="5.5" height="15.0" fill="rgb(219,88,21)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="92.3" y="165" width="5.5" height="15.0" fill="rgb(235,26,44)" rx="2" ry="2" />
+<text text-anchor="" x="95.33" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>cfree (1 samples, 0.47%)</title><rect x="130.7" y="197" width="5.5" height="15.0" fill="rgb(225,9,16)" rx="2" ry="2" />
+<text text-anchor="" x="133.74" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_replace (1 samples, 0.47%)</title><rect x="965.0" y="117" width="5.5" height="15.0" fill="rgb(206,71,13)" rx="2" ry="2" />
+<text text-anchor="" x="967.98" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (2 samples, 0.93%)</title><rect x="476.5" y="133" width="11.0" height="15.0" fill="rgb(238,146,51)" rx="2" ry="2" />
+<text text-anchor="" x="479.51" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (2 samples, 0.93%)</title><rect x="937.5" y="85" width="11.0" height="15.0" fill="rgb(226,62,4)" rx="2" ry="2" />
+<text text-anchor="" x="940.53" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (1 samples, 0.47%)</title><rect x="328.3" y="149" width="5.5" height="15.0" fill="rgb(233,47,51)" rx="2" ry="2" />
+<text text-anchor="" x="331.33" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_mutate (5 samples, 2.33%)</title><rect x="937.5" y="117" width="27.5" height="15.0" fill="rgb(224,14,51)" rx="2" ry="2" />
+<text text-anchor="" x="940.53" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >s..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="317.3" y="133" width="5.5" height="15.0" fill="rgb(206,132,45)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="64.9" y="133" width="5.5" height="15.0" fill="rgb(241,123,33)" rx="2" ry="2" />
+<text text-anchor="" x="67.88" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (1 samples, 0.47%)</title><rect x="306.4" y="101" width="5.5" height="15.0" fill="rgb(210,188,43)" rx="2" ry="2" />
+<text text-anchor="" x="309.37" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>cfree (2 samples, 0.93%)</title><rect x="937.5" y="101" width="11.0" height="15.0" fill="rgb(240,176,2)" rx="2" ry="2" />
+<text text-anchor="" x="940.53" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (1 samples, 0.47%)</title><rect x="1129.6" y="101" width="5.5" height="15.0" fill="rgb(224,73,51)" rx="2" ry="2" />
+<text text-anchor="" x="1132.63" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>openat64 (1 samples, 0.47%)</title><rect x="317.3" y="149" width="5.5" height="15.0" fill="rgb(213,95,10)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="602.7" y="85" width="5.5" height="15.0" fill="rgb(225,180,5)" rx="2" ry="2" />
+<text text-anchor="" x="605.74" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_Parser::next (1 samples, 0.47%)</title><rect x="1107.7" y="117" width="5.5" height="15.0" fill="rgb(209,69,23)" rx="2" ry="2" />
+<text text-anchor="" x="1110.67" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="317.3" y="85" width="5.5" height="15.0" fill="rgb(207,167,39)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::_Dir&amp; std::deque&lt;std::filesystem::__cxx11::_Dir, std::allocator&lt;std::filesystem::__cxx11::_Dir&gt; &gt;::emplace_back&lt;std::filesystem::__cxx11::_Dir&gt; (2 samples, 0.93%)</title><rect x="339.3" y="149" width="11.0" height="15.0" fill="rgb(226,41,33)" rx="2" ry="2" />
+<text text-anchor="" x="342.30" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (2 samples, 0.93%)</title><rect x="70.4" y="181" width="10.9" height="15.0" fill="rgb(252,102,53)" rx="2" ry="2" />
+<text text-anchor="" x="73.37" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>strchrnul@plt (1 samples, 0.47%)</title><rect x="86.8" y="117" width="5.5" height="15.0" fill="rgb(251,16,37)" rx="2" ry="2" />
+<text text-anchor="" x="89.84" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="317.3" y="37" width="5.5" height="15.0" fill="rgb(241,216,40)" rx="2" ry="2" />
+<text text-anchor="" x="320.35" y="47.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_List (31 samples, 14.42%)</title><rect x="608.2" y="133" width="170.2" height="15.0" fill="rgb(224,213,3)" rx="2" ry="2" />
+<text text-anchor="" x="611.23" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesystem::__cxx..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (7 samples, 3.26%)</title><rect x="421.6" y="101" width="38.4" height="15.0" fill="rgb(228,108,1)" rx="2" ry="2" />
+<text text-anchor="" x="424.63" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[un..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (4 samples, 1.86%)</title><rect x="690.6" y="85" width="21.9" height="15.0" fill="rgb(245,39,32)" rx="2" ry="2" />
+<text text-anchor="" x="693.56" y="95.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >m..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>getdents64 (1 samples, 0.47%)</title><rect x="1019.9" y="69" width="5.4" height="15.0" fill="rgb(207,19,36)" rx="2" ry="2" />
+<text text-anchor="" x="1022.86" y="79.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_List (7 samples, 3.26%)</title><rect x="740.0" y="117" width="38.4" height="15.0" fill="rgb(222,135,30)" rx="2" ry="2" />
+<text text-anchor="" x="742.95" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (3 samples, 1.40%)</title><rect x="262.5" y="117" width="16.4" height="15.0" fill="rgb(242,171,4)" rx="2" ry="2" />
+<text text-anchor="" x="265.47" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (2 samples, 0.93%)</title><rect x="81.3" y="133" width="11.0" height="15.0" fill="rgb(242,174,53)" rx="2" ry="2" />
+<text text-anchor="" x="84.35" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_List (2 samples, 0.93%)</title><rect x="1124.1" y="149" width="11.0" height="15.0" fill="rgb(243,182,29)" rx="2" ry="2" />
+<text text-anchor="" x="1127.14" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (1 samples, 0.47%)</title><rect x="15.5" y="165" width="5.5" height="15.0" fill="rgb(229,8,38)" rx="2" ry="2" />
+<text text-anchor="" x="18.49" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_M_append (61 samples, 28.37%)</title><rect x="778.4" y="133" width="334.8" height="15.0" fill="rgb(234,61,31)" rx="2" ry="2" />
+<text text-anchor="" x="781.37" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesystem::__cxx11::path::_M_append</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (1 samples, 0.47%)</title><rect x="81.3" y="117" width="5.5" height="15.0" fill="rgb(227,111,2)" rx="2" ry="2" />
+<text text-anchor="" x="84.35" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="1019.9" y="37" width="5.4" height="15.0" fill="rgb(223,97,28)" rx="2" ry="2" />
+<text text-anchor="" x="1022.86" y="47.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (1 samples, 0.47%)</title><rect x="460.0" y="133" width="5.5" height="15.0" fill="rgb(230,149,41)" rx="2" ry="2" />
+<text text-anchor="" x="463.05" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (4 samples, 1.86%)</title><rect x="81.3" y="197" width="22.0" height="15.0" fill="rgb(232,18,48)" rx="2" ry="2" />
+<text text-anchor="" x="84.35" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>getdents64 (9 samples, 4.19%)</title><rect x="410.7" y="133" width="49.3" height="15.0" fill="rgb(250,55,38)" rx="2" ry="2" />
+<text text-anchor="" x="413.65" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >getd..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>run_dijkstra (1 samples, 0.47%)</title><rect x="1151.6" y="197" width="5.5" height="15.0" fill="rgb(209,102,46)" rx="2" ry="2" />
+<text text-anchor="" x="1154.58" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>all (215 samples, 100%)</title><rect x="10.0" y="229" width="1180.0" height="15.0" fill="rgb(245,86,35)" rx="2" ry="2" />
+<text text-anchor="" x="13.00" y="239.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (1 samples, 0.47%)</title><rect x="92.3" y="149" width="5.5" height="15.0" fill="rgb(247,27,31)" rx="2" ry="2" />
+<text text-anchor="" x="95.33" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (1 samples, 0.47%)</title><rect x="306.4" y="117" width="5.5" height="15.0" fill="rgb(217,196,53)" rx="2" ry="2" />
+<text text-anchor="" x="309.37" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_Impl_deleter::operator (20 samples, 9.30%)</title><rect x="498.5" y="133" width="109.7" height="15.0" fill="rgb(254,21,48)" rx="2" ry="2" />
+<text text-anchor="" x="501.47" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesyst..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[ld-linux-x86-64.so.2] (6 samples, 2.79%)</title><rect x="26.5" y="117" width="32.9" height="15.0" fill="rgb(222,188,17)" rx="2" ry="2" />
+<text text-anchor="" x="29.47" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[l..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::recursive_directory_iterator::operator* (1 samples, 0.47%)</title><rect x="1184.5" y="197" width="5.5" height="15.0" fill="rgb(236,229,36)" rx="2" ry="2" />
+<text text-anchor="" x="1187.51" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[unknown] (6 samples, 2.79%)</title><rect x="246.0" y="133" width="32.9" height="15.0" fill="rgb(249,71,35)" rx="2" ry="2" />
+<text text-anchor="" x="249.00" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[u..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>operator new (1 samples, 0.47%)</title><rect x="15.5" y="181" width="5.5" height="15.0" fill="rgb(246,212,2)" rx="2" ry="2" />
+<text text-anchor="" x="18.49" y="191.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_M_split_cmpts (1 samples, 0.47%)</title><rect x="1113.2" y="133" width="5.5" height="15.0" fill="rgb(224,128,0)" rx="2" ry="2" />
+<text text-anchor="" x="1116.16" y="143.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (2 samples, 0.93%)</title><rect x="679.6" y="101" width="11.0" height="15.0" fill="rgb(227,15,49)" rx="2" ry="2" />
+<text text-anchor="" x="682.58" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::recursive_directory_iterator::increment (159 samples, 73.95%)</title><rect x="278.9" y="165" width="872.7" height="15.0" fill="rgb(248,59,42)" rx="2" ry="2" />
+<text text-anchor="" x="281.93" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >std::filesystem::__cxx11::recursive_directory_iterator::increment</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (2 samples, 0.93%)</title><rect x="81.3" y="165" width="11.0" height="15.0" fill="rgb(234,165,27)" rx="2" ry="2" />
+<text text-anchor="" x="84.35" y="175.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::filesystem::__cxx11::path::_List::_List (2 samples, 0.93%)</title><rect x="1162.6" y="197" width="10.9" height="15.0" fill="rgb(219,202,13)" rx="2" ry="2" />
+<text text-anchor="" x="1165.56" y="207.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>[libc.so.6] (4 samples, 1.86%)</title><rect x="586.3" y="101" width="21.9" height="15.0" fill="rgb(232,57,34)" rx="2" ry="2" />
+<text text-anchor="" x="589.28" y="111.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  >[..</text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>std::_V2::system_category (1 samples, 0.47%)</title><rect x="333.8" y="149" width="5.5" height="15.0" fill="rgb(217,103,44)" rx="2" ry="2" />
+<text text-anchor="" x="336.81" y="159.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+<g class="func_g" onmouseover="s(this)" onmouseout="c()" onclick="zoom(this)">
+<title>malloc (1 samples, 0.47%)</title><rect x="311.9" y="117" width="5.4" height="15.0" fill="rgb(225,161,32)" rx="2" ry="2" />
+<text text-anchor="" x="314.86" y="127.5" font-size="12" font-family="Verdana" fill="rgb(0,0,0)"  ></text>
+</g>
+</svg>

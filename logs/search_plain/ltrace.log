@@ -1,0 +1,33 @@
+% time     seconds  usecs/call     calls      function
+------ ----------- ----------- --------- --------------------
+ 10.68   33.101888          55    601793 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev
+ 10.67   33.088826          54    601791 _ZNKSt10filesystem7__cxx114path5_List13_Impl_deleterclEPNS2_5_ImplE
+  8.41   26.085408          75    345375 _ZNSt10filesystem7__cxx1128recursive_directory_iteratorppEv
+  6.14   19.051463          55    345375 _ZNKSt10filesystem7__cxx1128recursive_directory_iteratordeEv
+  5.35   16.577700          55    300896 _ZNSt10filesystem7__cxx114path14_M_split_cmptsEv
+  5.35   16.575056          55    300895 _ZNKSt10filesystem7__cxx114path7compareERKS1_
+  5.34   16.569871          55    300895 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1ERKS4_
+  5.34   16.561797          55    300896 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE17_S_to_string_viewESt17basic_string_viewIcS2_E
+  5.34   16.557194          55    300895 _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE4backEv
+  5.34   16.556440          55    300895 _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEcvSt17basic_string_viewIcS2_EEv
+  5.34   16.554947          55    300895 _ZNKSt10filesystem7__cxx114path5_List3endEv
+  5.34   16.551415          55    300896 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12__sv_wrapperC1ESt17basic_string_viewIcS2_E
+  5.34   16.550152          55    300896 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1ENS4_12__sv_wrapperERKS3_
+  5.34   16.547001          54    300895 _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE5emptyEv
+  5.33   16.535734          54    300896 _ZNSt10filesystem7__cxx114path5_ListC1Ev
+  5.33   16.534031          54    300895 _ZNSt10filesystem7__cxx114path5_ListC1ERKS2_
+  0.02    0.066529          79       835 _ZNSt10filesystem6statusERKNS_7__cxx114pathE
+  0.00    0.001351          54        25 _ZNSt10filesystem7__cxx1128recursive_directory_iteratorD1Ev
+  0.00    0.000888         177         5 _ZNSt10filesystem7__cxx1128recursive_directory_iteratorC1ERKNS0_4pathENS_17directory_optionsEPSt10error_code
+  0.00    0.000276          55         5 _ZNSt12__shared_ptrINSt10filesystem7__cxx1128recursive_directory_iterator10_Dir_stackELN9__gnu_cxx12_Lock_policyE2EEC1EOS6_
+  0.00    0.000272          54         5 _ZNSt12__shared_ptrINSt10filesystem7__cxx1128recursive_directory_iterator10_Dir_stackELN9__gnu_cxx12_Lock_policyE2EEC1Ev
+  0.00    0.000269          53         5 __errno_location
+  0.00    0.000205          68         3 strlen
+  0.00    0.000167          83         2 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv
+  0.00    0.000165          82         2 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12_Alloc_hiderC1EPcRKS3_
+  0.00    0.000117          58         2 _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEv
+  0.00    0.000112          56         2 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_S_copy_charsEPcPKcS7_
+  0.00    0.000112          56         2 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_set_lengthEm
+  0.00    0.000056          56         1 _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE5c_strEv
+------ ----------- ----------- --------- --------------------
+100.00  310.069442               5505973 total

@@ -1,0 +1,17 @@
+% time     seconds  usecs/call     calls      function
+------ ----------- ----------- --------- --------------------
+100.00  900.250512   450125256         2 _ZNSt6thread4joinEv
+  0.00    0.010319         859        12 _Znwm
+  0.00    0.007201        3600         2 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_createERmm
+  0.00    0.003406         681         5 memcpy
+  0.00    0.003382        1691         2 _ZNSt6thread15_M_start_threadESt10unique_ptrINS_6_StateESt14default_deleteIS1_EEPFvvE
+  0.00    0.001993         181        11 _ZdlPvm
+  0.00    0.001430         357         4 strlen
+  0.00    0.001096         365         3 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_disposeEv
+  0.00    0.000733         366         2 __errno_location
+  0.00    0.000433         433         1 _ZNSt10filesystem7__cxx114path5_ListC1Ev
+  0.00    0.000202         202         1 _ZNSt10filesystem7__cxx114path5_ListC1ERKS2_
+  0.00    0.000185         185         1 _ZNSt10filesystem7__cxx114path14_M_split_cmptsEv
+  0.00    0.000078          78         1 _ZNKSt10filesystem7__cxx114path5_List13_Impl_deleterclEPNS2_5_ImplE
+------ ----------- ----------- --------- --------------------
+100.00  900.280970                    47 total

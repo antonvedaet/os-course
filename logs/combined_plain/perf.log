@@ -1,0 +1,32 @@
+
+ Performance counter stats for './combined README.md /home/anton/itmo 5 100000':
+
+          1 102,25 msec task-clock:u                     #    1,335 CPUs utilized             
+                 0      context-switches:u               #    0,000 /sec                      
+                 0      cpu-migrations:u                 #    0,000 /sec                      
+               228      page-faults:u                    #  206,849 /sec                      
+     1 939 252 681      cycles:u                         #    1,759 GHz                         (41,26%)
+       217 394 199      stalled-cycles-frontend:u        #   11,21% frontend cycles idle        (43,23%)
+     4 292 844 791      instructions:u                   #    2,21  insn per cycle            
+                                                  #    0,05  stalled cycles per insn     (43,81%)
+       806 800 806      branches:u                       #  731,955 M/sec                       (44,12%)
+         2 693 212      branch-misses:u                  #    0,33% of all branches             (44,43%)
+     1 920 049 990      L1-dcache-loads:u                #    1,742 G/sec                       (44,74%)
+         8 481 346      L1-dcache-load-misses:u          #    0,44% of all L1-dcache accesses   (44,77%)
+   <not supported>      LLC-loads:u                                                           
+   <not supported>      LLC-load-misses:u                                                     
+       309 117 582      L1-icache-loads:u                #  280,441 M/sec                       (44,53%)
+         1 368 327      L1-icache-load-misses:u          #    0,44% of all L1-icache accesses   (43,98%)
+         1 123 867      dTLB-loads:u                     #    1,020 M/sec                       (43,44%)
+            61 823      dTLB-load-misses:u               #    5,50% of all dTLB cache accesses  (42,90%)
+           171 844      iTLB-loads:u                     #  155,902 K/sec                       (42,35%)
+            44 564      iTLB-load-misses:u               #   25,93% of all iTLB cache accesses  (41,80%)
+         4 238 075      L1-dcache-prefetches:u           #    3,845 M/sec                       (41,26%)
+   <not supported>      L1-dcache-prefetch-misses:u                                           
+
+       0,825413402 seconds time elapsed
+
+       0,611122000 seconds user
+       0,482250000 seconds sys
+
+

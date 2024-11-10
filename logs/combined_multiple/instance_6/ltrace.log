@@ -1,0 +1,25 @@
+% time     seconds  usecs/call     calls      function
+------ ----------- ----------- --------- --------------------
+100.00  920.303363   460151681         2 _ZNSt6thread4joinEv
+  0.00    0.030577       15288         2 _ZNSt6thread15_M_start_threadESt10unique_ptrINS_6_StateESt14default_deleteIS1_EEPFvvE
+  0.00    0.001260         105        12 _Znwm
+  0.00    0.000876          87        10 _ZdlPvm
+  0.00    0.000804          80        10 __errno_location
+  0.00    0.000320         106         3 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12_Alloc_hiderC1EPcRKS3_
+  0.00    0.000318          79         4 strlen
+  0.00    0.000307          76         4 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev
+  0.00    0.000263          87         3 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv
+  0.00    0.000238          79         3 _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEv
+  0.00    0.000237          79         3 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_S_copy_charsEPcPKcS7_
+  0.00    0.000234          78         3 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_set_lengthEm
+  0.00    0.000161          80         2 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1ERKS4_
+  0.00    0.000153          76         2 _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE5c_strEv
+  0.00    0.000086          86         1 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE17_S_to_string_viewESt17basic_string_viewIcS2_E
+  0.00    0.000086          86         1 _ZNSt10filesystem7__cxx114path5_ListC1Ev
+  0.00    0.000083          83         1 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12__sv_wrapperC1ESt17basic_string_viewIcS2_E
+  0.00    0.000083          83         1 _ZNSt10filesystem7__cxx114path14_M_split_cmptsEv
+  0.00    0.000082          82         1 _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1ENS4_12__sv_wrapperERKS3_
+  0.00    0.000079          79         1 _ZNSt10filesystem7__cxx114path5_ListC1ERKS2_
+  0.00    0.000072          72         1 _ZNKSt10filesystem7__cxx114path5_List13_Impl_deleterclEPNS2_5_ImplE
+------ ----------- ----------- --------- --------------------
+100.00  920.339682                    70 total
